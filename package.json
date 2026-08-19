@@ -1,0 +1,19 @@
+{
+  "name": "isbn-checksum-toolkit",
+  "version": "0.1.0",
+  "description": "Validate and generate ISBN-10, ISBN-13, and UPC-A checksums",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "dist/checksum.js",
+  "types": "dist/checksum.d.ts",
+  "bin": {
+    "checksum": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ]
+}
