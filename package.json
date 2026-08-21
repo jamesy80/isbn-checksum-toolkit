@@ -11,9 +11,12 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "test": "tsc && node --test dist/checksum.test.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/checksum.test.js",
+    "!dist/checksum.test.d.ts"
   ]
 }

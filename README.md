@@ -52,8 +52,19 @@ $ checksum to13 0-306-40615-2
 `check` exits 0 for a valid code and 1 for an invalid or unrecognized one, so
 it's usable as a shell test.
 
+## Tests
+
+```
+$ npm test
+```
+
+Runs against Node's built-in test runner (`node:test`), no test framework
+dependency needed. `checksum.test.ts` covers each algorithm's check-digit
+math, the X check character, hyphen/space normalization, and the format
+guessing in `validate`.
+
 ## Status
 
-Core checksum math and a working CLI are in place. Not yet handled: reading
-codes from a barcode image, ISSN/EAN-8, and batch validation from a file -
-see the roadmap in the issue tracker for what's next.
+Core checksum math, a working CLI, and unit tests are in place. Not yet
+handled: ISSN/EAN-8, batch validation from a file, and reading codes from a
+barcode image - see the roadmap in the issue tracker for what's next.
