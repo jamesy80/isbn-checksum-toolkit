@@ -2,11 +2,11 @@
 
 Every book barcode and most retail barcodes carry a check digit so a scanner
 (or a human typing a code into a form) can catch a mistyped or misread digit
-without a network round trip. The catch is that the three formats you'll run
-into - ISBN-10, ISBN-13/EAN-13, and UPC-A - each compute that digit with a
-different algorithm, and it's easy to get the weighting backwards when you
-port one by hand. This is a small TypeScript library plus a CLI that does the
-three algorithms correctly, with no dependencies.
+without a network round trip. The catch is that the formats you'll run into -
+ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, and EAN-8 - each compute that digit with
+a different algorithm, and it's easy to get the weighting backwards when you
+port one by hand. This is a small TypeScript library plus a CLI that does
+those algorithms correctly, with no dependencies.
 
 ## Formats
 
@@ -16,6 +16,15 @@ three algorithms correctly, with no dependencies.
   1, 3, 1, 3, ...
 - **UPC-A** - mod 10 over 11 digits with alternating weights 3, 1, 3, 1, ...
   (the mirror of EAN-13's pattern).
+- **ISSN** - mod 11 over 7 digits weighted 8 down to 2; the check character
+  can be `X`, same idea as ISBN-10.
+- **EAN-8** - mod 10 over 7 digits with the same alternating 3, 1, 3, 1, ...
+  weights as UPC-A.
+
+ISSN and EAN-8 are both 8 characters, so `validate()` can't tell them apart
+from length alone. It prefers EAN-8 and falls back to ISSN, except when the
+check character is `X`, which only ISSN allows. If you already know which one
+you have, call `validateIssn`/`validateEan8` directly instead of `validate`.
 
 ## Library usage
 
@@ -45,6 +54,12 @@ isbn13: invalid
 $ checksum gen13 978030640615
 7
 
+$ checksum genissn 0378595
+5
+
+$ checksum check 40170725
+ean8: valid
+
 $ checksum to13 0-306-40615-2
 9780306406157
 ```
@@ -61,10 +76,12 @@ $ npm test
 Runs against Node's built-in test runner (`node:test`), no test framework
 dependency needed. `checksum.test.ts` covers each algorithm's check-digit
 math, the X check character, hyphen/space normalization, and the format
-guessing in `validate`.
+guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
 
 ## Status
 
-Core checksum math, a working CLI, and unit tests are in place. Not yet
-handled: ISSN/EAN-8, batch validation from a file, and reading codes from a
-barcode image - see the roadmap in the issue tracker for what's next.
+Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
+CLI, and unit tests are in place. Not yet handled: batch validation from a
+file, a `--format` flag to force a format instead of guessing by length, and
+reading codes from a barcode image - see the roadmap in the issue tracker for
+what's next.

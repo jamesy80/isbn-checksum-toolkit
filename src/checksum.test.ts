@@ -7,6 +7,10 @@ import {
   validateEan13,
   computeUpcACheck,
   validateUpcA,
+  computeIssnCheck,
+  validateIssn,
+  computeEan8Check,
+  validateEan8,
   isbn10ToIsbn13,
   validate,
 } from './checksum';
@@ -64,6 +68,40 @@ test('validateUpcA validates full codes and rejects wrong check digits', () => {
   assert.equal(validateUpcA('03600029145'), false);
 });
 
+test('computeIssnCheck produces the correct check character', () => {
+  // 0378-5955 is a real, commonly cited valid ISSN.
+  assert.equal(computeIssnCheck('0378595'), '5');
+});
+
+test('computeIssnCheck produces X when the remainder is 10', () => {
+  assert.equal(computeIssnCheck('0000006'), 'X');
+});
+
+test('computeIssnCheck rejects bodies of the wrong length or shape', () => {
+  assert.throws(() => computeIssnCheck('123456'));
+  assert.throws(() => computeIssnCheck('12345678'));
+  assert.throws(() => computeIssnCheck('037859X'));
+});
+
+test('validateIssn validates full codes, including an X check character', () => {
+  assert.equal(validateIssn('0378-5955'), true);
+  assert.equal(validateIssn('0378-5956'), false);
+  assert.equal(validateIssn('0000006X'), true);
+  assert.equal(validateIssn('0000006x'), true);
+  assert.equal(validateIssn('037859'), false);
+});
+
+test('computeEan8Check produces the correct check digit', () => {
+  // 40170725 is a real, commonly cited valid EAN-8.
+  assert.equal(computeEan8Check('4017072'), '5');
+});
+
+test('validateEan8 validates full codes and rejects wrong check digits', () => {
+  assert.equal(validateEan8('40170725'), true);
+  assert.equal(validateEan8('40170726'), false);
+  assert.equal(validateEan8('4017072'), false);
+});
+
 test('isbn10ToIsbn13 re-keys under the 978 prefix with a recomputed check digit', () => {
   assert.equal(isbn10ToIsbn13('0-306-40615-2'), '9780306406157');
 });
@@ -77,4 +115,15 @@ test('validate guesses the format from length', () => {
   assert.deepEqual(validate('036000291452'), { valid: true, format: 'upca' });
   assert.deepEqual(validate('978-0-306-40615-7'), { valid: true, format: 'isbn13' });
   assert.deepEqual(validate('12345'), { valid: false, format: null });
+});
+
+test('validate on an 8-digit code prefers EAN-8, falling back to ISSN', () => {
+  // Valid as EAN-8 only.
+  assert.deepEqual(validate('40170725'), { valid: true, format: 'ean8' });
+  // Valid as ISSN only - not a valid EAN-8 check digit, so it falls back.
+  assert.deepEqual(validate('0378-5955'), { valid: true, format: 'issn' });
+  // An X check character can only be ISSN; EAN-8 is digits only.
+  assert.deepEqual(validate('0000006X'), { valid: true, format: 'issn' });
+  // Neither format's check digit matches.
+  assert.deepEqual(validate('12345678'), { valid: false, format: 'ean8' });
 });
