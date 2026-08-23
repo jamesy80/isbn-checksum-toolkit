@@ -13,6 +13,8 @@ import {
   validateEan8,
   isbn10ToIsbn13,
   validate,
+  isBarcodeFormat,
+  validateByFormat,
 } from './checksum';
 
 test('computeIsbn10Check produces a digit check character', () => {
@@ -126,4 +128,28 @@ test('validate on an 8-digit code prefers EAN-8, falling back to ISSN', () => {
   assert.deepEqual(validate('0000006X'), { valid: true, format: 'issn' });
   // Neither format's check digit matches.
   assert.deepEqual(validate('12345678'), { valid: false, format: 'ean8' });
+});
+
+test('isBarcodeFormat recognizes the five known formats and rejects junk', () => {
+  assert.equal(isBarcodeFormat('isbn10'), true);
+  assert.equal(isBarcodeFormat('isbn13'), true);
+  assert.equal(isBarcodeFormat('upca'), true);
+  assert.equal(isBarcodeFormat('issn'), true);
+  assert.equal(isBarcodeFormat('ean8'), true);
+  assert.equal(isBarcodeFormat('ISBN10'), false);
+  assert.equal(isBarcodeFormat('barcode'), false);
+});
+
+test('validateByFormat validates against a forced format, ignoring length guessing', () => {
+  assert.equal(validateByFormat('0-306-40615-2', 'isbn10'), true);
+  assert.equal(validateByFormat('978-0-306-40615-7', 'isbn13'), true);
+  assert.equal(validateByFormat('036000291452', 'upca'), true);
+  assert.equal(validateByFormat('0378-5955', 'issn'), true);
+  assert.equal(validateByFormat('40170725', 'ean8'), true);
+});
+
+test('validateByFormat resolves the EAN-8/ISSN ambiguity in favor of the given format', () => {
+  // 0378-5955 is a valid ISSN but not a valid EAN-8 check digit.
+  assert.equal(validateByFormat('03785955', 'ean8'), false);
+  assert.equal(validateByFormat('03785955', 'issn'), true);
 });

@@ -118,6 +118,28 @@ export function validateEan8(input: string): boolean {
   return computeEan8Check(code.slice(0, 7)) === code.slice(7);
 }
 
+const FORMATS: readonly BarcodeFormat[] = ['isbn10', 'isbn13', 'upca', 'issn', 'ean8'];
+
+export function isBarcodeFormat(value: string): value is BarcodeFormat {
+  return (FORMATS as readonly string[]).includes(value);
+}
+
+/** Validate against a caller-specified format instead of guessing by length. */
+export function validateByFormat(input: string, format: BarcodeFormat): boolean {
+  switch (format) {
+    case 'isbn10':
+      return validateIsbn10(input);
+    case 'isbn13':
+      return validateEan13(input);
+    case 'upca':
+      return validateUpcA(input);
+    case 'issn':
+      return validateIssn(input);
+    case 'ean8':
+      return validateEan8(input);
+  }
+}
+
 /** Guess the format from length and validate it accordingly. */
 export function validate(input: string): ValidationResult {
   const code = normalize(input);

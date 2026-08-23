@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import {
   validate,
+  validateByFormat,
+  isBarcodeFormat,
   computeIsbn10Check,
   computeEan13Check,
   computeUpcACheck,
@@ -11,7 +13,10 @@ import {
 
 function usage(): void {
   console.error(`usage:
-  checksum check <code>          detect format (8/10/12/13 digits) and validate
+  checksum check <code> [--format <format>]
+                                  detect format (8/10/12/13 digits) and validate,
+                                  or validate against a forced format instead of
+                                  guessing by length
   checksum gen10 <9 digits>      compute the ISBN-10 check character
   checksum gen13 <12 digits>     compute the ISBN-13/EAN-13 check digit
   checksum genupc <11 digits>    compute the UPC-A check digit
@@ -19,9 +24,30 @@ function usage(): void {
   checksum genean8 <7 digits>    compute the EAN-8 check digit
   checksum to13 <isbn10>         convert an ISBN-10 to ISBN-13 (978 prefix)
 
-  An 8-digit code is ambiguous between ISSN and EAN-8; "check" guesses
-  EAN-8 first and falls back to ISSN. Use genissn/genean8 directly if you
-  already know which one you have.`);
+  <format> is one of: isbn10, isbn13, upca, issn, ean8
+
+  An 8-digit code is ambiguous between ISSN and EAN-8; "check" without
+  --format guesses EAN-8 first and falls back to ISSN. Pass --format issn
+  or --format ean8 (or call genissn/genean8 directly) if you already know
+  which one you have.`);
+}
+
+/** Pull --format/--format=<value> out of the check command's args. */
+function parseCheckArgs(args: string[]): { code?: string; format?: string; error?: string } {
+  let code: string | undefined;
+  let format: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--format') {
+      format = args[++i];
+      if (format === undefined) return { error: '--format needs a value' };
+    } else if (a.startsWith('--format=')) {
+      format = a.slice('--format='.length);
+    } else if (code === undefined) {
+      code = a;
+    }
+  }
+  return { code, format };
 }
 
 function main(argv: string[]): number {
@@ -30,9 +56,19 @@ function main(argv: string[]): number {
   try {
     switch (command) {
       case 'check': {
-        if (!arg) return fail('missing <code>');
-        const result = validate(arg);
-        if (!result.format) return fail('code must be 10, 12, or 13 digits long');
+        const { code, format, error } = parseCheckArgs(argv.slice(1));
+        if (error) return fail(error);
+        if (!code) return fail('missing <code>');
+        if (format !== undefined) {
+          if (!isBarcodeFormat(format)) {
+            return fail(`unknown format '${format}' - expected one of isbn10, isbn13, upca, issn, ean8`);
+          }
+          const valid = validateByFormat(code, format);
+          console.log(`${format}: ${valid ? 'valid' : 'invalid'}`);
+          return valid ? 0 : 1;
+        }
+        const result = validate(code);
+        if (!result.format) return fail('code must be 8, 10, 12, or 13 digits long');
         console.log(`${result.format}: ${result.valid ? 'valid' : 'invalid'}`);
         return result.valid ? 0 : 1;
       }

@@ -60,12 +60,18 @@ $ checksum genissn 0378595
 $ checksum check 40170725
 ean8: valid
 
+$ checksum check 03785955 --format issn
+issn: valid
+
 $ checksum to13 0-306-40615-2
 9780306406157
 ```
 
 `check` exits 0 for a valid code and 1 for an invalid or unrecognized one, so
-it's usable as a shell test.
+it's usable as a shell test. By default it guesses the format from the code's
+length; pass `--format <isbn10|isbn13|upca|issn|ean8>` to validate against a
+specific format instead, which is the only way to resolve the ISSN/EAN-8
+ambiguity at length 8 without calling the library functions directly.
 
 ## Tests
 
@@ -81,7 +87,6 @@ guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
 ## Status
 
 Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
-CLI, and unit tests are in place. Not yet handled: batch validation from a
-file, a `--format` flag to force a format instead of guessing by length, and
-reading codes from a barcode image - see the roadmap in the issue tracker for
-what's next.
+CLI with format-forcing via `--format`, and unit tests are in place. Not yet
+handled: batch validation from a file, and reading codes from a barcode image
+- see the roadmap in the issue tracker for what's next.
