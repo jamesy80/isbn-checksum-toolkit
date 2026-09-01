@@ -65,6 +65,12 @@ issn: valid
 
 $ checksum to13 0-306-40615-2
 9780306406157
+
+$ checksum batch codes.txt
+1: 0-306-40615-2 isbn10: valid
+2: 978-0-306-40615-8 isbn13: invalid
+3: not-a-code unrecognized: not 8, 10, 12, or 13 digits
+3 codes checked, 1 valid, 1 invalid, 1 unrecognized
 ```
 
 `check` exits 0 for a valid code and 1 for an invalid or unrecognized one, so
@@ -72,6 +78,11 @@ it's usable as a shell test. By default it guesses the format from the code's
 length; pass `--format <isbn10|isbn13|upca|issn|ean8>` to validate against a
 specific format instead, which is the only way to resolve the ISSN/EAN-8
 ambiguity at length 8 without calling the library functions directly.
+
+`batch <file>` runs `check` over a file with one code per line - blank lines
+and lines starting with `#` are skipped - and prints a per-line result plus a
+summary count. It takes the same `--format` flag as `check`, applied to every
+line. It exits 0 only if every code in the file validates.
 
 ## Tests
 
@@ -87,6 +98,7 @@ guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
 ## Status
 
 Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
-CLI with format-forcing via `--format`, and unit tests are in place. Not yet
-handled: batch validation from a file, and reading codes from a barcode image
-- see the roadmap in the issue tracker for what's next.
+CLI with format-forcing via `--format` and file-based `batch` validation, and
+unit tests for the checksum math are in place. Not yet handled: publishing to
+npm, and reading codes from a barcode image - see the roadmap in the issue
+tracker for what's next.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import {
   validate,
   validateByFormat,
@@ -9,6 +10,7 @@ import {
   computeIssnCheck,
   computeEan8Check,
   isbn10ToIsbn13,
+  BarcodeFormat,
 } from './checksum';
 
 function usage(): void {
@@ -17,6 +19,11 @@ function usage(): void {
                                   detect format (8/10/12/13 digits) and validate,
                                   or validate against a forced format instead of
                                   guessing by length
+  checksum batch <file> [--format <format>]
+                                  validate one code per line of <file>; blank
+                                  lines and lines starting with # are skipped.
+                                  Exits 0 only if every code in the file is
+                                  valid.
   checksum gen10 <9 digits>      compute the ISBN-10 check character
   checksum gen13 <12 digits>     compute the ISBN-13/EAN-13 check digit
   checksum genupc <11 digits>    compute the UPC-A check digit
@@ -50,6 +57,41 @@ function parseCheckArgs(args: string[]): { code?: string; format?: string; error
   return { code, format };
 }
 
+/** Run one code per line of a file through validate() or validateByFormat(). */
+function runBatch(path: string, format: BarcodeFormat | undefined): number {
+  const text = readFileSync(path, 'utf8');
+  let checked = 0;
+  let invalid = 0;
+  let unrecognized = 0;
+
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const code = lines[i].trim();
+    if (code === '' || code.startsWith('#')) continue;
+    checked++;
+
+    if (format !== undefined) {
+      const valid = validateByFormat(code, format);
+      if (!valid) invalid++;
+      console.log(`${i + 1}: ${code} ${format}: ${valid ? 'valid' : 'invalid'}`);
+      continue;
+    }
+
+    const result = validate(code);
+    if (!result.format) {
+      unrecognized++;
+      console.log(`${i + 1}: ${code} unrecognized: not 8, 10, 12, or 13 digits`);
+      continue;
+    }
+    if (!result.valid) invalid++;
+    console.log(`${i + 1}: ${code} ${result.format}: ${result.valid ? 'valid' : 'invalid'}`);
+  }
+
+  const bad = invalid + unrecognized;
+  console.log(`${checked} code${checked === 1 ? '' : 's'} checked, ${checked - bad} valid, ${invalid} invalid, ${unrecognized} unrecognized`);
+  return bad === 0 ? 0 : 1;
+}
+
 function main(argv: string[]): number {
   const [command, arg] = argv;
 
@@ -71,6 +113,15 @@ function main(argv: string[]): number {
         if (!result.format) return fail('code must be 8, 10, 12, or 13 digits long');
         console.log(`${result.format}: ${result.valid ? 'valid' : 'invalid'}`);
         return result.valid ? 0 : 1;
+      }
+      case 'batch': {
+        const { code: file, format, error } = parseCheckArgs(argv.slice(1));
+        if (error) return fail(error);
+        if (!file) return fail('missing <file>');
+        if (format !== undefined && !isBarcodeFormat(format)) {
+          return fail(`unknown format '${format}' - expected one of isbn10, isbn13, upca, issn, ean8`);
+        }
+        return runBatch(file, format);
       }
       case 'gen10':
         if (!arg) return fail('missing <9 digits>');
