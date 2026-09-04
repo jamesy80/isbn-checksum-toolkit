@@ -1,8 +1,33 @@
 {
   "name": "isbn-checksum-toolkit",
   "version": "0.1.0",
-  "description": "Validate and generate ISBN-10, ISBN-13, and UPC-A checksums",
+  "description": "Validate and generate check digits for ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, and EAN-8 barcodes",
   "license": "MIT",
+  "author": "jamesy80",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jamesy80/isbn-checksum-toolkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jamesy80/isbn-checksum-toolkit/issues"
+  },
+  "homepage": "https://github.com/jamesy80/isbn-checksum-toolkit#readme",
+  "keywords": [
+    "isbn",
+    "isbn10",
+    "isbn13",
+    "ean13",
+    "ean8",
+    "upc",
+    "upca",
+    "issn",
+    "barcode",
+    "checksum",
+    "check-digit"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "type": "commonjs",
   "main": "dist/checksum.js",
   "types": "dist/checksum.d.ts",
@@ -12,7 +37,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "test": "tsc && node --test dist/checksum.test.js"
+    "test": "tsc && node --test dist/checksum.test.js",
+    "prepublishOnly": "npm test"
   },
   "files": [
     "dist",
