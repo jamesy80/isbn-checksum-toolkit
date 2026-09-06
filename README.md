@@ -84,6 +84,28 @@ and lines starting with `#` are skipped - and prints a per-line result plus a
 summary count. It takes the same `--format` flag as `check`, applied to every
 line. It exits 0 only if every code in the file validates.
 
+## Barcode module decoding
+
+`src/barcode-scan.ts` translates between a 13-digit EAN-13/ISBN-13 code and
+the 95-module black/white pattern a scanner would see for it:
+
+```ts
+import { encodeEan13Modules, decodeEan13Modules } from './src/barcode-scan';
+
+const modules = encodeEan13Modules('9780306406157');
+decodeEan13Modules(modules); // '9780306406157'
+```
+
+A UPC-A symbol is physically the same pattern as the EAN-13 symbol for "0"
+followed by the UPC-A's own 11 digits and check digit, so
+`decodeEan13Modules` reads UPC-A barcodes too - it just comes back with a
+leading 0 to strip off.
+
+This is the symbol-decoding half of "read a code from a barcode image";
+turning actual image pixels into a module string - finding the guard
+patterns and working out how many pixels make up one module - isn't wired
+up yet.
+
 ## Tests
 
 ```
@@ -94,11 +116,13 @@ Runs against Node's built-in test runner (`node:test`), no test framework
 dependency needed. `checksum.test.ts` covers each algorithm's check-digit
 math, the X check character, hyphen/space normalization, and the format
 guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
+`barcode-scan.test.ts` covers the module encode/decode round trip and the
+guard/parity/digit-pattern error cases.
 
 ## Status
 
 Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
 CLI with format-forcing via `--format` and file-based `batch` validation, and
-unit tests for the checksum math are in place. Not yet handled: publishing to
-npm, and reading codes from a barcode image - see the roadmap in the issue
-tracker for what's next.
+package metadata for an npm release are in place. Reading codes from a
+barcode image is in progress: the EAN-13/UPC-A module decoder is done, but
+nothing yet turns image pixels into the module string it expects.

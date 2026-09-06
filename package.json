@@ -37,12 +37,12 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
-    "test": "tsc && node --test dist/checksum.test.js",
+    "test": "tsc && node --test dist",
     "prepublishOnly": "npm test"
   },
   "files": [
     "dist",
-    "!dist/checksum.test.js",
-    "!dist/checksum.test.d.ts"
+    "!dist/*.test.js",
+    "!dist/*.test.d.ts"
   ]
 }
