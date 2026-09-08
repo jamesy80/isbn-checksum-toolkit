@@ -1,6 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeEan13Modules, decodeEan13Modules } from './barcode-scan';
+import {
+  encodeEan13Modules,
+  decodeEan13Modules,
+  runLengthsToModules,
+  runLengthsToEan13Modules,
+} from './barcode-scan';
+
+/** Turn a module string into pixel run lengths, each module `pixelsPerModule` pixels wide. */
+function modulesToRuns(modules: string, pixelsPerModule: number): number[] {
+  const runs: number[] = [];
+  let i = 0;
+  while (i < modules.length) {
+    let j = i;
+    while (j < modules.length && modules[j] === modules[i]) j++;
+    runs.push((j - i) * pixelsPerModule);
+    i = j;
+  }
+  return runs;
+}
 
 test('decodeEan13Modules round-trips a code encoded by encodeEan13Modules', () => {
   // 4006381333931 is the same real, commonly cited EAN-13 used to test
@@ -79,4 +97,48 @@ test('decodeEan13Modules rejects a digit group matching neither R code', () => {
   const modules = encodeEan13Modules('4006381333931');
   const broken = modules.slice(0, 50) + '1111111' + modules.slice(57);
   assert.throws(() => decodeEan13Modules(broken), /unrecognized right-hand digit pattern/);
+});
+
+test('runLengthsToModules round-trips an exact-pixel-multiple scanline', () => {
+  const modules = encodeEan13Modules('4006381333931');
+  const runs = modulesToRuns(modules, 3);
+  assert.equal(runLengthsToModules(runs, 95, true), modules);
+});
+
+test('runLengthsToModules round-trips a scanline with a non-integer module width', () => {
+  const modules = encodeEan13Modules('4006381333931');
+  // 2.6 pixels/module, then quantized to whole pixels the way a real image
+  // sensor would measure a run. Rounding each run independently accumulates
+  // that quantization error over 95 modules and drifts off by the end;
+  // cumulative-position rounding self-corrects it.
+  const moduleCounts = modulesToRuns(modules, 1);
+  const runs = moduleCounts.map((count) => Math.round(count * 2.6));
+  assert.equal(runLengthsToModules(runs, 95, true), modules);
+});
+
+test('runLengthsToModules rejects an empty run list', () => {
+  assert.throws(() => runLengthsToModules([], 95, true), /at least one run/);
+});
+
+test('runLengthsToModules rejects a non-positive moduleCount', () => {
+  assert.throws(() => runLengthsToModules([3, 3, 3], 0, true), /moduleCount/);
+});
+
+test('runLengthsToModules rejects a zero or negative run length', () => {
+  assert.throws(() => runLengthsToModules([3, 0, 3], 95, true), /run length/);
+  assert.throws(() => runLengthsToModules([3, -1, 3], 95, true), /run length/);
+});
+
+test('runLengthsToModules rejects runs finer-grained than moduleCount can represent', () => {
+  // 200 single-pixel runs for a 95-module symbol: each run is forced to at
+  // least 1 module regardless of what its share of the total width would
+  // naturally round to, so the result overshoots moduleCount.
+  const runs = new Array(200).fill(1);
+  assert.throws(() => runLengthsToModules(runs, 95, true), /expected 95/);
+});
+
+test('runLengthsToEan13Modules feeds straight into decodeEan13Modules', () => {
+  const code = '9780306406157';
+  const runs = modulesToRuns(encodeEan13Modules(code), 4);
+  assert.equal(decodeEan13Modules(runLengthsToEan13Modules(runs)), code);
 });

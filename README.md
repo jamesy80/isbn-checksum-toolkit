@@ -101,10 +101,28 @@ followed by the UPC-A's own 11 digits and check digit, so
 `decodeEan13Modules` reads UPC-A barcodes too - it just comes back with a
 leading 0 to strip off.
 
-This is the symbol-decoding half of "read a code from a barcode image";
-turning actual image pixels into a module string - finding the guard
-patterns and working out how many pixels make up one module - isn't wired
-up yet.
+`runLengthsToModules` turns a scanline's pixel run lengths - the widths of
+its alternating bar/space runs, starting from the first bar of the start
+guard, no leading quiet zone - into a module string, without needing the
+runs to be exact multiples of a pixel-perfect module width:
+
+```ts
+import { runLengthsToEan13Modules, decodeEan13Modules } from './src/barcode-scan';
+
+// each number is a run's width in pixels, alternating bar/space/bar/...
+const runs = [8, 3, 8, 3, 3, 3, 5, /* ...95 modules' worth... */];
+decodeEan13Modules(runLengthsToEan13Modules(runs)); // the 13-digit code
+```
+
+It rounds each run's *cumulative* pixel position to the nearest module
+boundary rather than rounding each run independently, so small per-run
+measurement error doesn't compound into a drift that shifts the last few
+digits by a module.
+
+This is still the symbol-decoding half of "read a code from a barcode
+image": it turns pixel measurements into a module string, but nothing yet
+locates those bar/space runs in an actual image file - that needs a pixel
+reader for some image format first.
 
 ## Tests
 
@@ -116,13 +134,16 @@ Runs against Node's built-in test runner (`node:test`), no test framework
 dependency needed. `checksum.test.ts` covers each algorithm's check-digit
 math, the X check character, hyphen/space normalization, and the format
 guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
-`barcode-scan.test.ts` covers the module encode/decode round trip and the
-guard/parity/digit-pattern error cases.
+`barcode-scan.test.ts` covers the module encode/decode round trip, the
+guard/parity/digit-pattern error cases, and the run-length-to-module
+conversion (exact and non-integer module widths, and its input validation).
 
 ## Status
 
 Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
 CLI with format-forcing via `--format` and file-based `batch` validation, and
 package metadata for an npm release are in place. Reading codes from a
-barcode image is in progress: the EAN-13/UPC-A module decoder is done, but
-nothing yet turns image pixels into the module string it expects.
+barcode image is in progress: the EAN-13/UPC-A module decoder is done and it
+can now turn a scanline's pixel run lengths into a module string, but
+nothing yet reads pixels from an actual image file to produce those run
+lengths.

@@ -1,10 +1,10 @@
 // Translates between a 13-digit EAN-13 code and the 95-module black/white
 // pattern a scanner sees for it ('1' = black module, '0' = white module).
 // This is the symbol-decoding core of "read a barcode from an image" - it
-// doesn't touch pixels or image files. That step still needs to turn a
-// scanned row of pixels into this module string (locating the guards and
-// working out how many pixels make up one module) before this is useful
-// end to end.
+// doesn't touch pixels or image files. runLengthsToModules turns a
+// scanline's measured bar/space widths into a module string; what's still
+// missing is locating that scanline (the guard patterns and the bar/space
+// runs that make it up) in actual image pixels.
 //
 // UPC-A barcodes decode here too: a UPC-A symbol is physically identical to
 // the EAN-13 symbol for "0" followed by the UPC-A's 11 digits and check
@@ -127,4 +127,67 @@ export function decodeEan13Modules(modules: string): string {
   }
 
   return String(firstDigit) + leftDigits + rightDigits;
+}
+
+/**
+ * Turn a scanline's run lengths (alternating pixel widths of bar and space,
+ * starting from the first bar of the start guard - no leading quiet zone)
+ * into a module string of '1'/'0' characters, `moduleCount` long.
+ *
+ * A scanned bar is rarely an exact multiple of the module width in pixels,
+ * so rounding each run independently would drift: small per-run errors
+ * accumulate over the length of the symbol and the last few digits come out
+ * shifted by a module. Instead this rounds the *cumulative* pixel position
+ * of each run boundary to the nearest module boundary, which is
+ * self-correcting - a run that measured a little wide steals a fraction of
+ * a module back from the next one instead of carrying the error forward.
+ */
+export function runLengthsToModules(
+  runs: readonly number[],
+  moduleCount: number,
+  firstRunIsBar: boolean,
+): string {
+  if (runs.length === 0) {
+    throw new Error('need at least one run');
+  }
+  if (!Number.isInteger(moduleCount) || moduleCount <= 0) {
+    throw new Error('moduleCount must be a positive integer');
+  }
+  for (const run of runs) {
+    if (!Number.isFinite(run) || run <= 0) {
+      throw new Error('each run length must be a positive number');
+    }
+  }
+
+  const total = runs.reduce((sum, run) => sum + run, 0);
+  const moduleWidth = total / moduleCount;
+
+  let modules = '';
+  let modulesSoFar = 0;
+  let pixelsSoFar = 0;
+  let bit = firstRunIsBar;
+  for (const run of runs) {
+    pixelsSoFar += run;
+    const targetModules = Math.round(pixelsSoFar / moduleWidth);
+    const count = Math.max(1, targetModules - modulesSoFar);
+    modules += (bit ? '1' : '0').repeat(count);
+    modulesSoFar += count;
+    bit = !bit;
+  }
+
+  if (modules.length !== moduleCount) {
+    throw new Error(
+      `scanline decoded to ${modules.length} modules, expected ${moduleCount} - runs don't match a symbol of this size`,
+    );
+  }
+  return modules;
+}
+
+/**
+ * Convenience wrapper of runLengthsToModules for EAN-13/UPC-A's fixed
+ * 95-module width. The start guard '101' always begins with a bar, so
+ * `runs` must start at that bar (no leading quiet zone run).
+ */
+export function runLengthsToEan13Modules(runs: readonly number[]): string {
+  return runLengthsToModules(runs, MODULE_COUNT, true);
 }
