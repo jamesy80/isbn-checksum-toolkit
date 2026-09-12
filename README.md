@@ -121,8 +121,33 @@ digits by a module.
 
 This is still the symbol-decoding half of "read a code from a barcode
 image": it turns pixel measurements into a module string, but nothing yet
-locates those bar/space runs in an actual image file - that needs a pixel
-reader for some image format first.
+locates those bar/space runs in a scanline - that needs a scanline extracted
+from actual pixels first, which is what `src/pnm.ts` now provides.
+
+## Reading image pixels
+
+`src/pnm.ts` reads pixel data out of PGM (`P5`) and PPM (`P6`) files, the
+simplest image formats with a plain documented byte layout:
+
+```ts
+import { readFileSync } from 'node:fs';
+import { parsePnmGrayscale, getRow } from './src/pnm';
+
+const image = parsePnmGrayscale(readFileSync('barcode.ppm'));
+const scanline = getRow(image, Math.floor(image.height / 2));
+```
+
+`parsePnmGrayscale` returns a single 8-bit grayscale sample per pixel; a PPM's
+three channels are combined with the standard luma weights
+(0.299R + 0.587G + 0.114B), since a barcode scanner only needs bar/space
+contrast, not color. Only 8-bit-per-channel files are supported - that's what
+any ordinary image tool writes; ASCII PNM (`P2`/`P3`) and 16-bit maxval
+aren't handled. `getRow` slices out one row as a scanline.
+
+What's still missing is turning a grayscale scanline into the bar/space run
+lengths `runLengthsToEan13Modules` expects - thresholding the pixel values
+into black/white and measuring the run of each - and then a CLI `scan`
+command to drive the whole pipeline from an image file to a validated code.
 
 ## Tests
 
@@ -137,13 +162,17 @@ guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
 `barcode-scan.test.ts` covers the module encode/decode round trip, the
 guard/parity/digit-pattern error cases, and the run-length-to-module
 conversion (exact and non-integer module widths, and its input validation).
+`pnm.test.ts` covers PGM and PPM parsing (including comments and whitespace
+variation in the header, and the luma conversion for PPM), row extraction,
+and the header/raster validation error cases.
 
 ## Status
 
 Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
 CLI with format-forcing via `--format` and file-based `batch` validation, and
 package metadata for an npm release are in place. Reading codes from a
-barcode image is in progress: the EAN-13/UPC-A module decoder is done and it
-can now turn a scanline's pixel run lengths into a module string, but
-nothing yet reads pixels from an actual image file to produce those run
-lengths.
+barcode image is in progress: the EAN-13/UPC-A module decoder can turn a
+scanline's pixel run lengths into a module string, and `src/pnm.ts` can now
+read pixels out of a PGM/PPM file and hand back a scanline. What's left is
+thresholding a grayscale scanline into bar/space run lengths, and a CLI
+`scan` command to wire the pieces together.
