@@ -144,10 +144,26 @@ contrast, not color. Only 8-bit-per-channel files are supported - that's what
 any ordinary image tool writes; ASCII PNM (`P2`/`P3`) and 16-bit maxval
 aren't handled. `getRow` slices out one row as a scanline.
 
-What's still missing is turning a grayscale scanline into the bar/space run
-lengths `runLengthsToEan13Modules` expects - thresholding the pixel values
-into black/white and measuring the run of each - and then a CLI `scan`
-command to drive the whole pipeline from an image file to a validated code.
+`thresholdScanline` turns a grayscale scanline into those bar/space run
+lengths, splitting pixels into black/white against a threshold - by default
+the midpoint between the scanline's own darkest and lightest pixel, which is
+enough for a barcode's high-contrast bars but can be overridden with an
+explicit value if a caller has measured a better one:
+
+```ts
+import { parsePnmGrayscale, getRow, thresholdScanline } from './src/pnm';
+import { runLengthsToEan13Modules, decodeEan13Modules } from './src/barcode-scan';
+
+const image = parsePnmGrayscale(readFileSync('barcode.ppm'));
+const scanline = getRow(image, Math.floor(image.height / 2));
+const { runs } = thresholdScanline(scanline);
+```
+
+Its runs cover the whole scanline, quiet zone and all - what's still missing
+is locating the start guard within them (`runLengthsToEan13Modules` expects
+runs starting at that guard's first bar, no leading quiet zone), and a CLI
+`scan` command to drive the whole pipeline from an image file to a validated
+code.
 
 ## Tests
 
@@ -164,7 +180,9 @@ guard/parity/digit-pattern error cases, and the run-length-to-module
 conversion (exact and non-integer module widths, and its input validation).
 `pnm.test.ts` covers PGM and PPM parsing (including comments and whitespace
 variation in the header, and the luma conversion for PPM), row extraction,
-and the header/raster validation error cases.
+the header/raster validation error cases, and scanline thresholding
+(default and explicit threshold, which run starts first, and a uniform
+scanline with no contrast at all).
 
 ## Status
 
@@ -172,7 +190,7 @@ Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
 CLI with format-forcing via `--format` and file-based `batch` validation, and
 package metadata for an npm release are in place. Reading codes from a
 barcode image is in progress: the EAN-13/UPC-A module decoder can turn a
-scanline's pixel run lengths into a module string, and `src/pnm.ts` can now
-read pixels out of a PGM/PPM file and hand back a scanline. What's left is
-thresholding a grayscale scanline into bar/space run lengths, and a CLI
-`scan` command to wire the pieces together.
+scanline's pixel run lengths into a module string, and `src/pnm.ts` can read
+pixels out of a PGM/PPM file, hand back a scanline, and threshold that
+scanline into bar/space run lengths. What's left is locating the start guard
+within those runs, and a CLI `scan` command to wire the pieces together.

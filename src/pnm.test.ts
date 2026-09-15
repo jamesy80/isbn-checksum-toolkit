@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePnmGrayscale, getRow } from './pnm';
+import { parsePnmGrayscale, getRow, thresholdScanline } from './pnm';
 
 /** Build the raw bytes of a binary PGM/PPM file from a header string and raster bytes. */
 function pnmBytes(header: string, raster: number[]): Uint8Array {
@@ -75,4 +75,46 @@ test('getRow rejects an out-of-range row', () => {
   const image = parsePnmGrayscale(bytes);
   assert.throws(() => getRow(image, 2), /out of range/);
   assert.throws(() => getRow(image, -1), /out of range/);
+});
+
+test('thresholdScanline splits a clean black/white scanline into runs', () => {
+  const scanline = Uint8Array.from([0, 0, 0, 255, 255, 0, 0, 255]);
+  const { runs, firstRunIsBar } = thresholdScanline(scanline);
+  assert.equal(firstRunIsBar, true);
+  assert.deepEqual(runs, [3, 2, 2, 1]);
+});
+
+test('thresholdScanline starts with a space run when the scanline starts light', () => {
+  const scanline = Uint8Array.from([255, 255, 0, 0, 0, 255]);
+  const { runs, firstRunIsBar } = thresholdScanline(scanline);
+  assert.equal(firstRunIsBar, false);
+  assert.deepEqual(runs, [2, 3, 1]);
+});
+
+test('thresholdScanline defaults to the midpoint of the scanline\'s own contrast', () => {
+  // Darkest pixel is 50, lightest is 150; midpoint 100 puts 90 on the dark
+  // side and 110 on the light side, even though neither is near 0 or 255.
+  const scanline = Uint8Array.from([50, 90, 110, 150]);
+  const { runs, firstRunIsBar } = thresholdScanline(scanline);
+  assert.equal(firstRunIsBar, true);
+  assert.deepEqual(runs, [2, 2]);
+});
+
+test('thresholdScanline accepts an explicit threshold instead of the auto midpoint', () => {
+  const scanline = Uint8Array.from([50, 90, 110, 150]);
+  // With a threshold of 200 every pixel counts as dark.
+  const { runs, firstRunIsBar } = thresholdScanline(scanline, 200);
+  assert.equal(firstRunIsBar, true);
+  assert.deepEqual(runs, [4]);
+});
+
+test('thresholdScanline treats a uniform scanline as one run', () => {
+  const scanline = Uint8Array.from([128, 128, 128, 128]);
+  const { runs, firstRunIsBar } = thresholdScanline(scanline);
+  assert.equal(firstRunIsBar, false);
+  assert.deepEqual(runs, [4]);
+});
+
+test('thresholdScanline rejects an empty scanline', () => {
+  assert.throws(() => thresholdScanline(Uint8Array.from([])), /at least one pixel/);
 });

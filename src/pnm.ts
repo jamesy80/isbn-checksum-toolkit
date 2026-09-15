@@ -1,9 +1,11 @@
 // Reads pixel data out of PGM ("P5") and PPM ("P6") image files - the
 // simplest image formats with a documented byte layout and no compression,
 // so a barcode scanner can get at pixels without an image-decoding
-// dependency. This is the pixel-reading half of "read a barcode from an
-// image"; src/barcode-scan.ts is the other half, turning a scanline's
-// bar/space runs into a module string once you have one.
+// dependency - and turns a grayscale scanline into the bar/space run
+// lengths src/barcode-scan.ts's runLengthsToModules expects. Between the
+// two, this file is the pixel-handling half of "read a barcode from an
+// image"; barcode-scan.ts is the other half, turning those runs into a
+// module string and then a code, once you have them.
 
 export interface GrayscaleImage {
   width: number;
@@ -115,4 +117,62 @@ export function getRow(image: GrayscaleImage, y: number): Uint8Array {
     throw new Error(`row ${y} out of range for image of height ${image.height}`);
   }
   return image.pixels.subarray(y * image.width, (y + 1) * image.width);
+}
+
+export interface ScanlineRuns {
+  /** Pixel widths of alternating bar/space runs, covering the whole scanline. */
+  runs: number[];
+  /** Whether the first run (runs[0]) is a bar (dark) or a space (light). */
+  firstRunIsBar: boolean;
+}
+
+/**
+ * Split a threshold in half between the darkest and lightest pixel in the
+ * scanline. That's a good enough black/white cutoff for a barcode, which is
+ * high-contrast by design (printed bars on a light background) and doesn't
+ * need Otsu's method or any other histogram-shape-sensitive threshold.
+ */
+function midpointThreshold(scanline: Uint8Array): number {
+  let min = 255;
+  let max = 0;
+  for (const pixel of scanline) {
+    if (pixel < min) min = pixel;
+    if (pixel > max) max = pixel;
+  }
+  return (min + max) / 2;
+}
+
+/**
+ * Threshold a grayscale scanline into alternating bar (dark)/space (light)
+ * run lengths, covering the full scanline - including the quiet zone and
+ * anything outside the barcode, which a caller still has to locate the start
+ * guard within. A pixel darker than `threshold` counts as part of a bar;
+ * `threshold` defaults to the midpoint between the scanline's darkest and
+ * lightest pixel, which only works if the scanline actually crosses a
+ * barcode's black/white contrast - pass an explicit threshold if you've
+ * measured a better one (e.g. from the whole image rather than one row).
+ */
+export function thresholdScanline(scanline: Uint8Array, threshold?: number): ScanlineRuns {
+  if (scanline.length === 0) {
+    throw new Error('scanline must have at least one pixel');
+  }
+  const t = threshold ?? midpointThreshold(scanline);
+
+  const firstRunIsBar = scanline[0] < t;
+  const runs: number[] = [];
+  let bit = firstRunIsBar;
+  let runLength = 0;
+  for (const pixel of scanline) {
+    const isBar = pixel < t;
+    if (isBar === bit) {
+      runLength++;
+    } else {
+      runs.push(runLength);
+      bit = isBar;
+      runLength = 1;
+    }
+  }
+  runs.push(runLength);
+
+  return { runs, firstRunIsBar };
 }
