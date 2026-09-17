@@ -124,6 +124,24 @@ image": it turns pixel measurements into a module string, but nothing yet
 locates those bar/space runs in a scanline - that needs a scanline extracted
 from actual pixels first, which is what `src/pnm.ts` now provides.
 
+`findEan13StartGuardIndex` locates the start guard within a full scanline's
+runs - the ones `thresholdScanline` below returns, covering the quiet zone
+and everything else in the row, not just the symbol:
+
+```ts
+import { findEan13StartGuardIndex, runLengthsToEan13Modules, decodeEan13Modules } from './src/barcode-scan';
+
+const startIndex = findEan13StartGuardIndex(runs, firstRunIsBar);
+decodeEan13Modules(runLengthsToEan13Modules(runs.slice(startIndex))); // needs runs trimmed to just the symbol too
+```
+
+It tells a real guard apart from a coincidentally even-width bar/space/bar
+triple elsewhere in the symbol's own digit patterns by requiring a quiet
+zone - a run much wider than a single module - immediately before it; a
+triple inside the symbol is always preceded by another digit's run instead.
+This is a best-effort location, not a proof, so a caller decoding the result
+should still confirm it against the checksum.
+
 ## Reading image pixels
 
 `src/pnm.ts` reads pixel data out of PGM (`P5`) and PPM (`P6`) files, the
@@ -159,11 +177,12 @@ const scanline = getRow(image, Math.floor(image.height / 2));
 const { runs } = thresholdScanline(scanline);
 ```
 
-Its runs cover the whole scanline, quiet zone and all - what's still missing
-is locating the start guard within them (`runLengthsToEan13Modules` expects
-runs starting at that guard's first bar, no leading quiet zone), and a CLI
-`scan` command to drive the whole pipeline from an image file to a validated
-code.
+Its runs cover the whole scanline, quiet zone and all; `findEan13StartGuardIndex`
+above locates the start guard within them. What's still missing is trimming
+those runs to just the symbol - `runLengthsToEan13Modules` needs the trailing
+quiet zone and anything past it cut off too, not just the leading one - and a
+CLI `scan` command to drive the whole pipeline from an image file to a
+validated code.
 
 ## Tests
 
@@ -176,8 +195,11 @@ dependency needed. `checksum.test.ts` covers each algorithm's check-digit
 math, the X check character, hyphen/space normalization, and the format
 guessing in `validate`, including the EAN-8/ISSN ambiguity at length 8.
 `barcode-scan.test.ts` covers the module encode/decode round trip, the
-guard/parity/digit-pattern error cases, and the run-length-to-module
-conversion (exact and non-integer module widths, and its input validation).
+guard/parity/digit-pattern error cases, the run-length-to-module conversion
+(exact and non-integer module widths, and its input validation), and
+locating the start guard within a scanline's runs (with and without a
+leading quiet zone, and rejecting an even-width triple that isn't preceded
+by one).
 `pnm.test.ts` covers PGM and PPM parsing (including comments and whitespace
 variation in the header, and the luma conversion for PPM), row extraction,
 the header/raster validation error cases, and scanline thresholding
@@ -190,7 +212,9 @@ Core checksum math (ISBN-10, ISBN-13/EAN-13, UPC-A, ISSN, EAN-8), a working
 CLI with format-forcing via `--format` and file-based `batch` validation, and
 package metadata for an npm release are in place. Reading codes from a
 barcode image is in progress: the EAN-13/UPC-A module decoder can turn a
-scanline's pixel run lengths into a module string, and `src/pnm.ts` can read
+scanline's pixel run lengths into a module string, `src/pnm.ts` can read
 pixels out of a PGM/PPM file, hand back a scanline, and threshold that
-scanline into bar/space run lengths. What's left is locating the start guard
-within those runs, and a CLI `scan` command to wire the pieces together.
+scanline into bar/space run lengths, and `findEan13StartGuardIndex` can
+locate the start guard within those runs. What's left is trimming the runs
+after the guard down to just the symbol, and a CLI `scan` command to wire
+the pieces together.

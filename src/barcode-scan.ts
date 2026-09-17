@@ -191,3 +191,51 @@ export function runLengthsToModules(
 export function runLengthsToEan13Modules(runs: readonly number[]): string {
   return runLengthsToModules(runs, MODULE_COUNT, true);
 }
+
+// A real quiet zone is wider than this by a comfortable margin - EAN-13's
+// spec minimum is 7-11 modules depending on side, but this only needs to be
+// wide enough to rule out the digit patterns' own runs, all of which are
+// 4 modules or narrower.
+const QUIET_ZONE_MIN_RATIO = 3;
+// How close the start guard's three run widths have to be to each other to
+// count as "even". Real pixel measurement noise keeps them from being
+// exactly equal even when they are genuinely one module each.
+const START_GUARD_RUN_TOLERANCE = 1.5;
+
+/**
+ * Find the index into `runs` (as returned by thresholdScanline, which reads
+ * across a whole scanline with no idea where the symbol starts) of the
+ * EAN-13 start guard's first bar - the position runLengthsToEan13Modules
+ * needs `runs` sliced to before it can turn them into a module string.
+ *
+ * A bar/space/bar triple with all three runs about the same width isn't
+ * enough on its own to identify the guard: some digit patterns contain a
+ * coincidentally even-width triple too (L_CODE's '0011001' is space/bar/
+ * space/bar at module widths 2/2/2/1). What tells the real guard apart is
+ * that it's preceded by a quiet zone - a run much wider than a single
+ * module - while a triple occurring inside the symbol is preceded by
+ * another digit's run, which never is. Scanning left to right and taking
+ * the first candidate that passes both checks finds the real guard before
+ * any such coincidence, as long as the real guard itself measured cleanly;
+ * a caller that goes on to decode the result should still confirm it with
+ * a checksum, since this is a best-effort location, not a proof.
+ */
+export function findEan13StartGuardIndex(runs: readonly number[], firstRunIsBar: boolean): number {
+  if (runs.length < 3) {
+    throw new Error('need at least 3 runs to contain a start guard');
+  }
+  let isBar = firstRunIsBar;
+  for (let i = 0; i + 2 < runs.length; i++) {
+    if (isBar) {
+      const [a, b, c] = [runs[i], runs[i + 1], runs[i + 2]];
+      const guardWidth = (a + b + c) / 3;
+      const evenWidth = Math.max(a, b, c) / Math.min(a, b, c) <= START_GUARD_RUN_TOLERANCE;
+      const precededByQuietZone = i === 0 || runs[i - 1] >= guardWidth * QUIET_ZONE_MIN_RATIO;
+      if (evenWidth && precededByQuietZone) {
+        return i;
+      }
+    }
+    isBar = !isBar;
+  }
+  throw new Error('no EAN-13 start guard found in scanline runs');
+}

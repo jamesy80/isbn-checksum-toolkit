@@ -5,6 +5,7 @@ import {
   decodeEan13Modules,
   runLengthsToModules,
   runLengthsToEan13Modules,
+  findEan13StartGuardIndex,
 } from './barcode-scan';
 
 /** Turn a module string into pixel run lengths, each module `pixelsPerModule` pixels wide. */
@@ -141,4 +142,44 @@ test('runLengthsToEan13Modules feeds straight into decodeEan13Modules', () => {
   const code = '9780306406157';
   const runs = modulesToRuns(encodeEan13Modules(code), 4);
   assert.equal(decodeEan13Modules(runLengthsToEan13Modules(runs)), code);
+});
+
+test('findEan13StartGuardIndex locates the guard after a quiet zone', () => {
+  const runs = [30, ...modulesToRuns(encodeEan13Modules('4006381333931'), 3)];
+  assert.equal(findEan13StartGuardIndex(runs, false), 1);
+});
+
+test('findEan13StartGuardIndex accepts the guard as the very first run', () => {
+  const runs = modulesToRuns(encodeEan13Modules('4006381333931'), 3);
+  assert.equal(findEan13StartGuardIndex(runs, true), 0);
+});
+
+test('findEan13StartGuardIndex works with a non-integer module width', () => {
+  const moduleCounts = modulesToRuns(encodeEan13Modules('4006381333931'), 1);
+  const symbolRuns = moduleCounts.map((count) => Math.round(count * 2.6));
+  const runs = [50, ...symbolRuns];
+  assert.equal(findEan13StartGuardIndex(runs, false), 1);
+});
+
+test('findEan13StartGuardIndex result feeds into runLengthsToEan13Modules and decodeEan13Modules', () => {
+  const code = '9780306406157';
+  const runs = [40, ...modulesToRuns(encodeEan13Modules(code), 4)];
+  const startIndex = findEan13StartGuardIndex(runs, false);
+  const symbolRuns = runs.slice(startIndex);
+  assert.equal(decodeEan13Modules(runLengthsToEan13Modules(symbolRuns)), code);
+});
+
+test('findEan13StartGuardIndex throws with fewer than 3 runs', () => {
+  assert.throws(() => findEan13StartGuardIndex([4, 4], true), /at least 3 runs/);
+});
+
+test('findEan13StartGuardIndex throws when no start guard is present', () => {
+  assert.throws(() => findEan13StartGuardIndex([50, 4, 4], false), /no EAN-13 start guard/);
+});
+
+test('findEan13StartGuardIndex is not fooled by an even-width triple with no quiet zone before it', () => {
+  // [5, 5, 5] looks like a guard in isolation, but it's preceded by another
+  // run of the same width rather than a quiet zone, so it should be
+  // rejected - and here there's nothing else to find, so it throws.
+  assert.throws(() => findEan13StartGuardIndex([5, 5, 5, 5, 5], false), /no EAN-13 start guard/);
 });
